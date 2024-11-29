@@ -1,0 +1,4 @@
+__pycache__
+*.secret
+data_dump.pkl
+mastodon_data.csv
