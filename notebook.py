@@ -1,11 +1,11 @@
 import marimo
 
-__generated_with = "0.9.27"
+__generated_with = "0.10.14"
 app = marimo.App()
 
 
 @app.cell
-def __():
+def _():
     # Uncomment this code if you want to run the notebook on marimo cloud
     # import micropip
     # await micropip.install("Mastodon.py")
@@ -13,7 +13,7 @@ def __():
 
 
 @app.cell
-def __():
+def _():
     import marimo as mo
     import pickle
     import requests
@@ -40,7 +40,7 @@ def __():
 
 
 @app.cell
-def __():
+def _():
     # from mastodon import Mastodon
 
     # # NOTE: This code only needs to be run ONCE to register your app,
@@ -54,13 +54,13 @@ def __():
 
 
 @app.cell
-def __(auth_form):
+def _(auth_form):
     auth_form
     return
 
 
 @app.cell
-def __(requests):
+def _(requests):
     def is_llamafile_working(llamafile_URL):
         response = requests.request(
             url=llamafile_URL,
@@ -73,7 +73,7 @@ def __(requests):
 
 
 @app.cell
-def __(auth_form, invalid_form, is_llamafile_working, mo):
+def _(auth_form, invalid_form, is_llamafile_working, mo):
     mo.stop(invalid_form(auth_form), mo.md("**Submit the form to continue.**"))
 
     mo.stop(
@@ -102,13 +102,13 @@ def __(auth_form, invalid_form, is_llamafile_working, mo):
 
 
 @app.cell
-def __(mo):
+def _(mo):
     mo.md(r"""# Getting data from my Mastodon account...""")
     return
 
 
 @app.cell
-def __(auth_form, byota, pickle, timelines):
+def _(auth_form, byota, pickle, timelines):
     offline_mode = auth_form.value["offline_mode"]
     paginated_data = {}
 
@@ -127,7 +127,7 @@ def __(auth_form, byota, pickle, timelines):
 
 
 @app.cell
-def __(get_compact_data, mo, offline_mode, paginated_data, pd):
+def _(get_compact_data, mo, offline_mode, paginated_data, pd):
     mo.stop(paginated_data is None, mo.md(f"**Issues connecting to Mastodon:**"))
 
     if not offline_mode:
@@ -143,22 +143,48 @@ def __(get_compact_data, mo, offline_mode, paginated_data, pd):
 
 
 @app.cell
-def __(mo):
+def _(mo):
     mo.md("""# My timeline""")
     return
 
 
 @app.cell
-def __(auth_form, byota, df, functools, time):
+def _(byota, df, functools, time):
+    # tt_ = time.time()
+    # lf_embeddings = byota.calculate_embeddings(df["text"],functools.partial(byota.get_llamafile_embedding, llamafile_URL=auth_form.value["emb_llamafile_url"]))
+    # print(time.time() - tt_)
+
     tt_ = time.time()
-    lf_embeddings = byota.calculate_embeddings(df["text"],functools.partial(byota.get_llamafile_embedding, llamafile_URL=auth_form.value["emb_llamafile_url"]))
+    lf_embeddings = byota.calculate_embeddings(df["text"],functools.partial(byota.get_ollama_embedding, ollama_URL="http://localhost:11434/api/embeddings", ollama_model="all-minilm"))
     print(time.time() - tt_)
+
+    # byota.get_ollama_embedding(" ", "http://localhost:11434/api/embeddings", "all-minilm")
+    # byota.get_llamafile_embedding("", llamafile_URL=auth_form.value["emb_llamafile_url"])
+
+    # import json
+
+    # response = requests.request(
+    #             url="http://localhost:11434/api/embeddings",
+    #             method="POST",
+    #             data= json.dumps({
+    #                 "model": "mxbai-embed-large",
+    #                 "prompt": "whatever"
+    #             }),
+    #         )
+    # response.raise_for_status()
     return lf_embeddings, tt_
 
 
 @app.cell
-def __(TSNE, alt, df, lf_embeddings, mo, pd):
-    tsne = TSNE(n_components=2, random_state=42, perplexity=5)
+def _():
+    # for ee in lf_embeddings:
+    #     print(len(ee))
+    return
+
+
+@app.cell
+def _(TSNE, alt, df, lf_embeddings, mo, pd):
+    tsne = TSNE(n_components=2, random_state=42, perplexity=3)
     projections = tsne.fit_transform(lf_embeddings)
 
     # df_ = pd.DataFrame(zip(projections[:,0], projections[:,1], [class_mapping[lbl] for lbl in lbls], df['1']), columns=["x","y","lbl", "text"])
@@ -182,7 +208,7 @@ def __(TSNE, alt, df, lf_embeddings, mo, pd):
 
 
 @app.cell
-def __(chart, mo):
+def _(chart, mo):
     mo.vstack(
         [
             chart,
@@ -193,7 +219,7 @@ def __(chart, mo):
 
 
 @app.cell
-def __(mo):
+def _(mo):
     query = mo.ui.text(
         value="42",
         label="Enter a post id or some free-form text to find the most similar posts:\n",
@@ -203,19 +229,19 @@ def __(mo):
 
 
 @app.cell
-def __(query):
+def _(query):
     query
     return
 
 
 @app.cell
-def __(auth_form, byota, df, lf_embeddings, query):
+def _(auth_form, byota, df, lf_embeddings, query):
     byota.most_similar_to(query.value, df["text"], lf_embeddings, auth_form.value['emb_llamafile_url'])
     return
 
 
 @app.cell
-def __(BeautifulSoup):
+def _(BeautifulSoup):
     def get_compact_data(paginated_data: list) -> list[tuple[int, str]]:
         compact_data = []
         for page in paginated_data:
@@ -233,7 +259,7 @@ def __(BeautifulSoup):
 
 
 @app.cell
-def __(mo):
+def _(mo):
     # Create a form with multiple elements
     auth_form = (
         mo.md(
@@ -294,7 +320,7 @@ def __(mo):
 
 
 @app.cell
-def __():
+def _():
     return
 
 

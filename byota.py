@@ -70,6 +70,29 @@ def get_llamafile_embedding(input_text: str, llamafile_URL: str):
     return json.loads(response.text)["embedding"]
 
 
+def get_ollama_embedding(input_text: str, ollama_URL: str, ollama_model: str):
+
+    if not input_text:
+        input_text = " "
+
+    try:
+        response = requests.request(
+            url=ollama_URL,
+            method="POST",
+            data=json.dumps({
+                "model": ollama_model,
+                "prompt": input_text
+            }),
+        )
+        response.raise_for_status()
+    except requests.RequestException as e:
+        print(f"Request failed: {e}")
+        raise
+
+    # print(f"Response text: {response.text}")
+    return json.loads(response.text)["embedding"]
+
+
 # @mo.cache
 def calculate_embeddings(texts, emb_func):
     embeddings = []
