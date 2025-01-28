@@ -1,5 +1,5 @@
 platformdirs>=2.1
-marimo==0.10.14
+marimo==0.10.17
 Mastodon.py==1.8.1
 altair==5.5.0
 beautifulsoup4==4.12.3
