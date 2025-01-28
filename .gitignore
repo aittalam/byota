@@ -1,4 +1,4 @@
+.DS_Store
 __pycache__
-*.secret
-data_dump.pkl
-mastodon_data.csv
+dump_*
+secret_*
