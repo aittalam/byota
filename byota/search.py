@@ -31,7 +31,7 @@ class SearchService():
             return self._embedding_service.get_embedding(query)
 
     def most_similar_indices(self, query, k=5):
-        """Given a query (whether as an integer index to a post or plain
+        """Given a query (whether as an integer index to a status or plain
         text), return the k indices of the most similar embeddings.
         """
         q = self.prepare_query(query)
@@ -40,7 +40,7 @@ class SearchService():
         return self._tree.query(q, k=k + 1)[1]
 
     def most_similar_embeddings(self, query, k=5):
-        """Given a query (whether as an integer index to a post or plain
+        """Given a query (whether as an integer index to a status or plain
         text), return the k most similar embeddings."""
         indices = self.most_similar_indices(query, k)
 

@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.10.17"
-app = marimo.App()
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -64,7 +64,7 @@ def _(Path):
     dataframes_data_file = "dump_dataframes.pkl"
     embeddings_data_file = "dump_embeddings.pkl"
 
-    cached_timelines = True
+    cached_timelines =  True
     cached_dataframes = True
     cached_embeddings = True
 
@@ -204,7 +204,7 @@ def _(
 
 @app.cell
 def _(mo):
-    mo.md("""# My timeline""")
+    mo.md("""# My timeline(s)""")
     return
 
 
@@ -230,7 +230,7 @@ def _(TSNE, alt, dataframes, embeddings, mo, pd):
 
     def tsne(dataframes, embeddings, perplexity, random_state=42):
         """Runs dimensionality reduction using TSNE on the input embeddings.
-        Returns dataframes containing posts id, text, and 2D coordinates
+        Returns dataframes containing status id, text, and 2D coordinates
         for plotting.
         """
         tsne = TSNE(n_components=2, random_state=random_state, perplexity=perplexity)
@@ -256,7 +256,7 @@ def _(TSNE, alt, dataframes, embeddings, mo, pd):
     df_, all_embeddings = tsne(dataframes, embeddings, perplexity=16)
 
     chart = mo.ui.altair_chart(
-        alt.Chart(df_, title="Timeline Visualization")#, height=800)
+        alt.Chart(df_, title="Timeline Visualization", height=500)
         .mark_point()
         .encode(
             x="x",
@@ -275,6 +275,12 @@ def _(chart, mo):
             chart.value[["id", "label", "text"]] if len(chart.value) > 0 else chart.value,
         ]
     )
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md("""# Timeline search""")
     return
 
 
@@ -309,6 +315,166 @@ def _(all_embeddings, np, query_form, search_service):
 
     plt.show()
     return diff_large, diff_mid, diff_small, mse, plt
+
+
+@app.cell
+def _(rerank_form):
+    rerank_form
+    return
+
+
+@app.cell
+def _(byota_mastodon, mastodon_client, mo, rerank_form):
+    # check for anything invalid in the form
+    mo.stop(rerank_form.value is None,
+            mo.md("**Submit the form to continue.**"))
+
+    user_statuses = byota_mastodon.get_paginated_statuses(mastodon_client,
+                        max_pages=rerank_form.value["num_user_status_pages"],
+                        exclude_reblogs=rerank_form.value["exclude_reblogs"])
+    return (user_statuses,)
+
+
+@app.cell
+def _(mo):
+    mo.md("""## Your statuses:""")
+    return
+
+
+@app.cell
+def _(get_compact_data, pd, user_statuses):
+    user_statuses_df = pd.DataFrame(get_compact_data(user_statuses),
+                                    columns=["id", "text"])
+    user_statuses_df
+    return (user_statuses_df,)
+
+
+@app.cell
+def _(mo):
+    mo.md("""## Your re-ranked timeline:""")
+    return
+
+
+@app.cell
+def _(
+    dataframes,
+    embedding_service,
+    embeddings,
+    np,
+    rerank_form,
+    time,
+    user_statuses_df,
+):
+    # calculate embeddings for user statuses
+    user_statuses_embeddings = embedding_service.calculate_embeddings(user_statuses_df["text"])
+
+    timeline_to_rerank = rerank_form.value["timeline_to_rerank"]
+
+    # build an index of most similar statuses to the ones
+    # published / boosted by the user
+
+    rerank_start_time = time.time()
+    # index is in reverse order (from largest to smallest similarity)
+    idx = np.flip(
+            # return indices of the sorted list, instead of values
+            # we want to get pointers to statuses, not actual similarities
+            np.argsort(
+                # to measure how much I might like a timeline status,
+                # I sum all the similarity values calculated between
+                # that status and all the statuses in my feed
+                np.sum(
+                    # dot product is a decent quick'n'dirty way to calculate
+                    # similarity between two vectors (the more similar they
+                    # are, the larger the product)
+                    np.dot(
+                        user_statuses_embeddings,
+                        embeddings[timeline_to_rerank].T), axis=0)))
+
+    print(time.time()-rerank_start_time)
+
+    # return the statuses sorted by that index
+    dataframes[timeline_to_rerank].iloc[idx][['label','text']]
+    return (
+        idx,
+        rerank_start_time,
+        timeline_to_rerank,
+        user_statuses_embeddings,
+    )
+
+
+@app.cell
+def _():
+    # # Wanna get some intuition re: the similarity measure?
+    # # Here's a simple example: the seven values you get are
+    # # the scores for the seven vectors in bbb (the higher
+    # # they are, the more similar vectors they have in aaa).
+    # # ... Can you tell why the third vector in bbb ([1,1,0,0])
+    # # is the most similar to vectors found in aaa?
+
+    # aaa = np.array([
+    #           [1,0,0,0],
+    #           [0,1,0,0],
+    #           [0,0,1,0],
+    #           [1,1,0,0],
+    #          ]).astype(np.float32)
+
+    # bbb = np.array([
+    #           [1,0,0,0],
+    #           [0,1,0,0],
+    #           [1,1,0,0],
+    #           [0,0,1,0],
+    #           [0,1,1,0],
+    #           [0,0,0,1],
+    #           [0,0,1,1],
+    #          ]).astype(np.float32)
+
+    # np.sum(np.dot(aaa, bbb.T), axis=0)
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md("""### My own posts, re-ranked according to their similarity to posts in tag/gopher""")
+    return
+
+
+@app.cell
+def _(
+    byota_mastodon,
+    embedding_service,
+    get_compact_data,
+    mastodon_client,
+    np,
+    pd,
+):
+    my_posts = byota_mastodon.get_paginated_statuses(mastodon_client,
+                        max_pages=10,
+                        exclude_reblogs=True, exclude_replies=True)
+    my_posts_df = pd.DataFrame(get_compact_data(my_posts),
+                                    columns=["id", "text"])
+    my_posts_embeddings = embedding_service.calculate_embeddings(my_posts_df["text"])
+
+    ds_posts = byota_mastodon.get_paginated_data(mastodon_client, "tag/gopher", max_pages=1)
+    ds_posts_df = pd.DataFrame(get_compact_data(ds_posts),
+                                    columns=["id", "text"])
+    ds_posts_embeddings = embedding_service.calculate_embeddings(ds_posts_df["text"])
+
+
+    my_idx = np.flip(np.argsort(np.sum(np.dot(
+                        ds_posts_embeddings,
+                        my_posts_embeddings.T), axis=0)))
+    my_posts_df["scores"]= np.sum(np.dot(ds_posts_embeddings,my_posts_embeddings.T), axis=0)
+    my_posts_df.iloc[my_idx][['text', 'scores']]
+    # my_posts_df[['text', 'scores']]
+    return (
+        ds_posts,
+        ds_posts_df,
+        ds_posts_embeddings,
+        my_idx,
+        my_posts,
+        my_posts_df,
+        my_posts_embeddings,
+    )
 
 
 @app.cell
@@ -384,6 +550,34 @@ def _(mo):
 
 @app.cell
 def _(mo):
+    # Create a form for timeline re-ranking
+    rerank_form = (
+        mo.md(
+            """
+        # Timeline re-ranking
+        **User statuses**
+
+        {num_user_status_pages}    {exclude_reblogs}
+
+        **Timelines**
+
+        {timeline_to_rerank}
+    """
+        )
+        .batch(
+            num_user_status_pages=mo.ui.slider(start=1, stop=20,
+                                               label="Number of pages to load",
+                                               value=1),
+            timeline_to_rerank=mo.ui.radio(options=["home", "local", "public"], value="home"),
+            exclude_reblogs=mo.ui.checkbox(label="Exclude reblogs")
+        )
+        .form(show_clear_button=True, bordered=True)
+    )
+    return (rerank_form,)
+
+
+@app.cell
+def _(mo):
     # Create a registration form
 
     default_api_base_url = "https://your.instance.url"
@@ -441,7 +635,7 @@ def _(mo):
 def _(mo):
     query_form = mo.ui.text(
         value="42",
-        label="Enter a post id or some free-form text to find the most similar posts:\n",
+        label="Enter a status id or some free-form text to find the most similar statuses:\n",
         full_width=True,
     )
     return (query_form,)
@@ -511,7 +705,7 @@ def _(BeautifulSoup, EmbeddingService, byota_mastodon, pd, pickle, time):
         if not cached:
             embeddings = {}
             for k in dataframes:
-                print(f"Embedding posts from timeline: {k}")
+                print(f"Embedding statuses from timeline: {k}")
                 tt_ = time.time()
                 embeddings[k] = embedding_service.calculate_embeddings(dataframes[k]["text"])
                 print(time.time() - tt_)
@@ -526,7 +720,7 @@ def _(BeautifulSoup, EmbeddingService, byota_mastodon, pd, pickle, time):
 
 
     def get_compact_data(paginated_data: list) -> list[tuple[int, str]]:
-        """Extract compact (id, text) pairs from a paginated list of posts."""
+        """Extract compact (id, text) pairs from a paginated list of statuses."""
         compact_data = []
         for page in paginated_data:
             for toot in page:

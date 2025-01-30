@@ -53,7 +53,7 @@ def login(clientcred_filename: str,
 
 
 def get_paginated_data(mastodon_client: mastodon.Mastodon, timeline_type: str, max_pages: int = 40):
-    """Gets paginated posts from one of the following timelines:
+    """Gets paginated statuses from one of the following timelines:
        `home`, `local`, `public`, `tag/hashtag` or `list/id`.
 
     See https://mastodonpy.readthedocs.io/en/stable/07_timelines.html
@@ -78,6 +78,47 @@ def get_paginated_data(mastodon_client: mastodon.Mastodon, timeline_type: str, m
                 paginated_data.append(tl)
 
             max_id=tl._pagination_next.get("max_id")
+            bar.update()
+            i+=1
+    return paginated_data
+
+
+def get_paginated_statuses(mastodon_client: mastodon.Mastodon,
+                           max_pages: int = 1,
+                           exclude_replies=False,
+                           exclude_reblogs=False):
+    """Gets paginated statuses from one of the following timelines:
+       `home`, `local`, `public`, `tag/hashtag` or `list/id`.
+
+    See https://mastodonpy.readthedocs.io/en/stable/07_timelines.html
+    and https://docs.joinmastodon.org/methods/timelines/#home
+    """
+
+    tl = mastodon_client.account_statuses(mastodon_client.me()["id"],
+                                          exclude_replies=exclude_replies,
+                                          exclude_reblogs=exclude_reblogs)
+
+    paginated_data = []
+    max_id = None
+    i = 1
+    with mo.status.progress_bar(total=max_pages,
+                                title=f"Account Statuses (replies={not exclude_replies}, reblogs={not exclude_reblogs})") as bar:
+        while len(tl) > 0 and i <= max_pages:
+            print(
+                f"Loading page {i}: max_id = {max_id}"
+            )
+            tl = mastodon_client.account_statuses(mastodon_client.me()["id"],
+                                                  exclude_replies=exclude_replies,
+                                                  exclude_reblogs=exclude_reblogs,
+                                                  max_id=max_id)
+            if len(tl)>0:
+                paginated_data.append(tl)
+
+            if hasattr(tl, "_pagination_next"):
+                max_id=tl._pagination_next.get("max_id")
+            else:
+                print("No more pages available.")
+                break
             bar.update()
             i+=1
     return paginated_data
