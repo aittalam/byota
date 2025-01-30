@@ -60,20 +60,13 @@ def _(Path):
     usercred_filename = "secret_usercred.txt"
 
     # dump files for offline mode
-    paginated_data_file = "dump_paginated_data.pkl"
-    dataframes_data_file = "dump_dataframes.pkl"
-    embeddings_data_file = "dump_embeddings.pkl"
-
-    cached_timelines =  True
-    cached_dataframes = True
-    cached_embeddings = True
+    paginated_data_file = "dump_paginated_data_.pkl"
+    dataframes_data_file = "dump_dataframes_.pkl"
+    embeddings_data_file = "dump_embeddings_.pkl"
 
     app_registered = True if Path(clientcred_filename).is_file() else False
     return (
         app_registered,
-        cached_dataframes,
-        cached_embeddings,
-        cached_timelines,
         clientcred_filename,
         dataframes_data_file,
         embeddings_data_file,
@@ -117,6 +110,7 @@ def _(auth_form):
 @app.cell
 def _(
     LLamafileEmbeddingService,
+    OllamaEmbeddingService,
     auth_form,
     byota_mastodon,
     clientcred_filename,
@@ -139,13 +133,19 @@ def _(
             mo.md("**Authentication error.**"))
 
     # instatiate an embedding service (and break if it does not work)
-    embedding_service = LLamafileEmbeddingService(
-        auth_form.value["emb_llamafile_url"]
-    )
+    if auth_form.value["emb_server"]=="llamafile":
+        embedding_service = LLamafileEmbeddingService(
+            auth_form.value["emb_server_url"]
+        )
+    else:
+        embedding_service = OllamaEmbeddingService(
+            auth_form.value["emb_server_url"],
+            auth_form.value["emb_server_model"]
+        )
 
     mo.stop(
         not embedding_service.is_working(),
-        mo.md("**Cannot access llamafile embedding server.**"),
+        mo.md(f"**Cannot access {auth_form.value['emb_server']} embedding server.**"),
     )
 
     # collect the names of the timelines we want to download from
@@ -159,7 +159,15 @@ def _(
 
     # set offline mode
     offline_mode = auth_form.value["offline_mode"]
+
+    # choose what to read from cache
+    cached_timelines =  offline_mode
+    cached_dataframes = offline_mode
+    cached_embeddings = offline_mode
     return (
+        cached_dataframes,
+        cached_embeddings,
+        cached_timelines,
         embedding_service,
         k,
         mastodon_client,
@@ -497,7 +505,11 @@ def _(mo):
 
         **Embeddings**
 
-        {emb_llamafile_url}
+        {emb_server}
+
+        {emb_server_url}
+
+        {emb_server_model}
 
         **Caching**
 
@@ -514,10 +526,19 @@ def _(mo):
             tl_list=mo.ui.checkbox(label="List"),
             tl_hashtag_txt=mo.ui.text(),
             tl_list_txt=mo.ui.text(),
-            emb_llamafile_url=mo.ui.text(
-                label="Embedding server URL",
+            emb_server=mo.ui.radio(label="Server type:",
+                                   options=["llamafile", "ollama"],
+                                   value="llamafile",
+                                   inline=True
+                                  ),
+            emb_server_url=mo.ui.text(
+                label="Embedding server URL:",
                 value="http://localhost:8080/embedding",
                 full_width=True
+            ),
+            emb_server_model=mo.ui.text(
+                label="Embedding server model:",
+                value="all-minilm"
             ),
             offline_mode=mo.ui.checkbox(label="Run in offline mode"),
         )
@@ -600,7 +621,7 @@ def _(mo):
                 full_width=True
             ),
             api_base_url=mo.ui.text(
-                label="Mastodon instance API base URL",
+                label="Mastodon instance API base URL:",
                 value=default_api_base_url,
                 full_width=True
             ),

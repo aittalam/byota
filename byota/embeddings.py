@@ -71,7 +71,7 @@ class OllamaEmbeddingService(EmbeddingService):
             method="POST",
             data=json.dumps({
                 "model": self._model,
-                "prompt": ""
+                "input": ""
             }),
         )
         return response.status_code
@@ -88,7 +88,7 @@ class OllamaEmbeddingService(EmbeddingService):
                 method="POST",
                 data=json.dumps({
                     "model": self._model,
-                    "prompt": text
+                    "input": text
                 }),
             )
             response.raise_for_status()
@@ -96,4 +96,4 @@ class OllamaEmbeddingService(EmbeddingService):
             print(f"Request failed: {e}")
             raise
 
-        return json.loads(response.text)["embedding"]
+        return json.loads(response.text)["embeddings"][0]
