@@ -30,6 +30,7 @@ def _():
         LLamafileEmbeddingService,
         OllamaEmbeddingService
     )
+    import byota.layout as bl
     import byota.mastodon as byota_mastodon
     from byota.search import SearchService
     return (
@@ -41,6 +42,7 @@ def _():
         SearchService,
         TSNE,
         alt,
+        bl,
         byota_mastodon,
         functools,
         mo,
@@ -65,7 +67,9 @@ def _(Path):
     embeddings_data_file = "dump_embeddings_.pkl"
 
     app_registered = True if Path(clientcred_filename).is_file() else False
+    app_authenticated = True if Path(usercred_filename).is_file() else False
     return (
+        app_authenticated,
         app_registered,
         clientcred_filename,
         dataframes_data_file,
@@ -76,89 +80,106 @@ def _(Path):
 
 
 @app.cell
-def _(app_registered, mo, reg_form, show_if):
-    show_if(not app_registered, reg_form, mo.md("**Your application is registered**"))
+def _(app_registered, bl, mo):
+    bl.show_if(not app_registered, bl.reg_form, mo.md("**Your application is registered**"))
     return
 
 
 @app.cell
-def _(
-    app_registered,
-    byota_mastodon,
-    clientcred_filename,
-    invalid_form,
-    mo,
-    reg_form,
-):
+def _(app_registered, bl, byota_mastodon, clientcred_filename, mo):
     if not app_registered:
-        mo.stop(invalid_form(reg_form), mo.md("**Invalid values provided in the registration form**"))
+        # first check the registration form is filled
+        mo.stop(bl.invalid_form(bl.reg_form), mo.md("**Invalid values provided in the registration form**"))
 
+        # register the application
         byota_mastodon.register_app(
-            reg_form.value['application_name'],
-            reg_form.value['api_base_url'],
+            bl.reg_form.value['application_name'],
+            bl.reg_form.value['api_base_url'],
             clientcred_filename
         )
     return
 
 
 @app.cell
-def _(auth_form):
-    auth_form
-    return
+def _(app_authenticated, bl, byota_mastodon, clientcred_filename, mo):
+    auth_url = byota_mastodon.authorize_app(clientcred_filename)
+    bl.show_if(not app_authenticated,
+        mo.vstack((
+            mo.md(f"Click on [this link]({auth_url}) to authorize your application, then copy the authorization code you are given in the form below"),
+            bl.login_form
+        )), mo.md("**Your application is authenticated**"))
+    return (auth_url,)
+
+
+@app.cell
+def _(
+    app_authenticated,
+    bl,
+    byota_mastodon,
+    clientcred_filename,
+    mo,
+    usercred_filename,
+):
+    if not app_authenticated:
+        mo.stop(bl.invalid_form(bl.login_form), mo.md("**Submit the login form to continue**"))
+
+        # login (and break if that does not work)
+        mastodon_client = byota_mastodon.login(clientcred_filename,
+                                               usercred_filename,
+                                               bl.login_form.value.get("login"),
+                                               code=bl.login_form.value.get("auth_code")
+                                              )
+
+    else:
+        import mastodon
+        mastodon_client = mastodon.Mastodon(access_token=usercred_filename)
+
+    mo.stop(mastodon_client is None, mo.md("**Authentication error.**"))
+
+    bl.config_form
+    return mastodon, mastodon_client
 
 
 @app.cell
 def _(
     LLamafileEmbeddingService,
     OllamaEmbeddingService,
-    auth_form,
-    byota_mastodon,
-    clientcred_filename,
-    invalid_form,
+    bl,
     mo,
     timelines_dict,
-    usercred_filename,
 ):
     # check for anything invalid in the form
-    mo.stop(invalid_form(auth_form),
+    mo.stop(bl.invalid_form(bl.config_form),
             mo.md("**Submit the form to continue.**"))
 
-    # login (and break if that does not work)
-    mastodon_client = byota_mastodon.login(clientcred_filename,
-                                           usercred_filename,
-                                           auth_form.value.get("login"),
-                                           auth_form.value.get("pw")
-                                          )
-    mo.stop(mastodon_client is None,
-            mo.md("**Authentication error.**"))
 
     # instatiate an embedding service (and break if it does not work)
-    if auth_form.value["emb_server"]=="llamafile":
+    if bl.config_form.value["emb_server"]=="llamafile":
         embedding_service = LLamafileEmbeddingService(
-            auth_form.value["emb_server_url"]
+            bl.config_form.value["emb_server_url"]
         )
     else:
         embedding_service = OllamaEmbeddingService(
-            auth_form.value["emb_server_url"],
-            auth_form.value["emb_server_model"]
+            bl.config_form.value["emb_server_url"],
+            bl.config_form.value["emb_server_model"]
         )
 
     mo.stop(
         not embedding_service.is_working(),
-        mo.md(f"**Cannot access {auth_form.value['emb_server']} embedding server.**"),
+        mo.md(f"**Cannot access {bl.config_form.value['emb_server']} embedding server.**"),
     )
 
     # collect the names of the timelines we want to download from
     timelines = []
     for k in timelines_dict.keys():
-        if auth_form.value[k]:
+        if bl.config_form.value[k]:
             tl_string = timelines_dict[k]
             if tl_string in ["tag", "list"]:
-                tl_string += f'/{auth_form.value[f"{k}_txt"]}'
+                tl_string += f'/{bl.config_form.value[f"{k}_txt"]}'
             timelines.append(tl_string)
 
     # set offline mode
-    offline_mode = auth_form.value["offline_mode"]
+    offline_mode = bl.config_form.value["offline_mode"]
 
     # choose what to read from cache
     cached_timelines =  offline_mode
@@ -170,7 +191,6 @@ def _(
         cached_timelines,
         embedding_service,
         k,
-        mastodon_client,
         offline_mode,
         timelines,
         tl_string,
@@ -487,90 +507,6 @@ def _(
 
 @app.cell
 def _(mo):
-    # Create the Configuration form
-
-    auth_form = (
-        mo.md(
-            """
-        # Configuration
-        **Mastodon Credentials**
-
-        {login}         {pw}
-
-        **Timelines**
-
-        {tl_home} {tl_local} {tl_public}
-
-        {tl_hashtag} {tl_hashtag_txt} {tl_list} {tl_list_txt}
-
-        **Embeddings**
-
-        {emb_server}
-
-        {emb_server_url}
-
-        {emb_server_model}
-
-        **Caching**
-
-        {offline_mode}
-    """
-        )
-        .batch(
-            login=mo.ui.text(label="Login:"),
-            pw=mo.ui.text(label="Password:", kind="password"),
-            tl_home=mo.ui.checkbox(label="Home", value=True),
-            tl_local=mo.ui.checkbox(label="Local"),
-            tl_public=mo.ui.checkbox(label="Public"),
-            tl_hashtag=mo.ui.checkbox(label="Hashtag"),
-            tl_list=mo.ui.checkbox(label="List"),
-            tl_hashtag_txt=mo.ui.text(),
-            tl_list_txt=mo.ui.text(),
-            emb_server=mo.ui.radio(label="Server type:",
-                                   options=["llamafile", "ollama"],
-                                   value="llamafile",
-                                   inline=True
-                                  ),
-            emb_server_url=mo.ui.text(
-                label="Embedding server URL:",
-                value="http://localhost:8080/embedding",
-                full_width=True
-            ),
-            emb_server_model=mo.ui.text(
-                label="Embedding server model:",
-                value="all-minilm"
-            ),
-            offline_mode=mo.ui.checkbox(label="Run in offline mode"),
-        )
-        .form(show_clear_button=True, bordered=True)
-    )
-
-    # a dictionary mapping Timeline UI checkboxes with the respective
-    # strings that identify them in the Mastodon API
-    timelines_dict = {
-        "tl_home": "home",
-        "tl_local": "local",
-        "tl_public": "public",
-        "tl_hashtag": "tag",
-        "tl_list": "list",
-    }
-
-    def invalid_form(form):
-        """A form (e.g. login) is invalid if it has no value,
-        or if any of its keys have no value."""
-        if form.value is None:
-            return True
-
-        for k in form.value.keys():
-            if form.value[k] is None:
-                return True
-
-        return False
-    return auth_form, invalid_form, timelines_dict
-
-
-@app.cell
-def _(mo):
     # Create a form for timeline re-ranking
     rerank_form = (
         mo.md(
@@ -595,61 +531,6 @@ def _(mo):
         .form(show_clear_button=True, bordered=True)
     )
     return (rerank_form,)
-
-
-@app.cell
-def _(mo):
-    # Create a registration form
-
-    default_api_base_url = "https://your.instance.url"
-
-    reg_form = (
-        mo.md(
-            """
-        # App Registration
-        **Register your application**
-
-        {application_name}
-        {api_base_url}
-
-    """
-        )
-        .batch(
-            application_name=mo.ui.text(
-                label="Application name:",
-                value="my_timeline_algorithm",
-                full_width=True
-            ),
-            api_base_url=mo.ui.text(
-                label="Mastodon instance API base URL:",
-                value=default_api_base_url,
-                full_width=True
-            ),
-        )
-        .form(show_clear_button=True, bordered=True)
-    )
-
-    def invalid_reg_form(reg_form):
-        """A reg form is invalid if the URL is the default one"""
-        if reg_form.value is None:
-            return True
-
-        for k in reg_form.value.keys():
-            if reg_form.value[k] is None or reg_form.value[k]=="":
-                return True
-
-        if reg_form.value['api_base_url']==default_api_base_url:
-            return True
-
-        return False
-
-
-    def show_if(condition: bool, if_true, if_false):
-        if condition:
-            return if_true
-        else:
-            return if_false
-    return default_api_base_url, invalid_reg_form, reg_form, show_if
 
 
 @app.cell
@@ -764,7 +645,16 @@ def _(BeautifulSoup, EmbeddingService, byota_mastodon, pd, pickle, time):
 
 @app.cell
 def _():
-    return
+    # a dictionary mapping Timeline UI checkboxes with the respective
+    # strings that identify them in the Mastodon API
+    timelines_dict = {
+        "tl_home": "home",
+        "tl_local": "local",
+        "tl_public": "public",
+        "tl_hashtag": "tag",
+        "tl_list": "list",
+    }
+    return (timelines_dict,)
 
 
 if __name__ == "__main__":

@@ -9,16 +9,28 @@ def register_app(app_name: str,
                  clientcred_filename:str,
                  ):
     
+    # create and save client app credentials
     mastodon.Mastodon.create_app(app_name,
                                  api_base_url=api_base_url,
                                  to_file=clientcred_filename
                                  )
 
 
+def authorize_app(clientcred_filename: str) -> str:
+
+    # instantiate a mastodon client from app credentials
+    m = mastodon.Mastodon(
+        client_id=clientcred_filename
+    )
+
+    return m.auth_request_url(scopes=['read'])
+
 def login(clientcred_filename: str,
           usercred_filename: str,
-          login: str,
-          password: str):
+          login: str = None,
+          password: str = None,
+          code: str = None
+          ):
     """Checks if client credentials are available and logs user in."""
 
     usercred_file = Path(usercred_filename)
@@ -37,8 +49,20 @@ def login(clientcred_filename: str,
                 client_id=clientcred_filename
             )
 
-            # log in / save access token
-            mastodon_client.log_in(login, password, to_file=usercred_filename)
+            if code is None:
+                # log in / save access token
+                mastodon_client.log_in(login,
+                                       password,
+                                       to_file=usercred_filename,
+                                       scopes=['read'],
+                                       )
+            else:
+                print("Logging via auth code")
+                mastodon_client.log_in(login,
+                                       code=code,
+                                       to_file=usercred_filename,
+                                       scopes=['read'],
+                                       )
 
         # if user access token is available, authenticate with it
         mastodon_client = mastodon.Mastodon(
