@@ -1,3 +1,16 @@
+# NOTE: BYOTA has become a [Mozilla.ai Blueprint](https://github.com/mozilla-ai/byota/)!
+
+What does this mean?
+
+- This repo will still be available, but frozen in read-only mode
+- All new development will happen at https://github.com/mozilla-ai/byota/
+- Main developer (me!) and license (Apache 2.0) are the same, but you will also find
+  - More [documentation](https://mozilla-ai.github.io/byota/)
+  - A [Docker image](https://hub.docker.com/r/mzdotai/byota/tags) ready for you to play with
+  - A [demo on HuggingFace spaces](https://huggingface.co/spaces/mozilla-ai/byota)
+ 
+For more info, check [this blog post](https://blog.mozilla.ai/build-your-own-timeline-algorithm-a-blueprint-2/).
+
 # Build Your Own Timeline Algorithm
 
 Timeline algorithms should be useful for people, not for companies. Their quality should not be evaluated in terms of how much more time people spend on a platform, but rather in terms of how well they serve their users’ purposes. Objectives might differ, from delving deeper into a topic to connecting with like-minded communities, solving a problem or just passing time until the bus arrives. How these objectives are reached might differ too, e.g. while respecting instances’ bandwidth, one’s own as well as others’ privacy, algorithm trustworthiness and software licenses.
